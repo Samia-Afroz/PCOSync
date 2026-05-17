@@ -1,5 +1,8 @@
 import ProgressReport from '../models/ProgressReport.js';
 import UserActivity from '../models/UserActivity.js';
+import PeriodLog from '../models/PeriodLog.js';
+import { calculateCycleStats } from '../services/cycleStatsService.js';
+import PDFDocument from 'pdfkit';
 
 // =========================
 // HELPER FUNCTIONS
@@ -250,6 +253,116 @@ const calculateDietData = async (userId, startDate, endDate) => {
   };
 };
 
+// Calculate menstrual data
+const calculateMenstrualData = async (userId) => {
+  try {
+    const logs = await PeriodLog.find({ userId }).sort({ date: -1 });
+    if (!logs.length) {
+      return {
+        currentDay: 1,
+        cycleLength: 28,
+        nextPeriod: 'Not available',
+        dateRange: 'No data',
+        avgCycle: '28',
+        periodLength: '5-7',
+        regularity: 'N/A'
+      };
+    }
+
+    const stats = calculateCycleStats(logs);
+    const sortedLogs = logs.sort((a, b) => new Date(b.date) - new Date(a.date)); // Most recent first
+    const lastPeriodDate = new Date(sortedLogs[0].date);
+    const today = new Date();
+    const daysSinceLastPeriod = Math.floor((today - lastPeriodDate) / (1000 * 60 * 60 * 24));
+
+    let currentDay = daysSinceLastPeriod + 1;
+    const cycleLength = stats.averageLength || 28;
+
+    // If currentDay > cycleLength, it's a new cycle
+    if (currentDay > cycleLength) {
+      currentDay = currentDay % cycleLength || cycleLength;
+    }
+
+    // Next period date
+    const nextPeriodDate = new Date(lastPeriodDate);
+    nextPeriodDate.setDate(nextPeriodDate.getDate() + cycleLength);
+    const nextPeriodStr = nextPeriodDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    // Date range for last period: find start and end of last period
+    let lastPeriodStart = lastPeriodDate;
+    let lastPeriodEnd = lastPeriodDate;
+    const logDates = new Set(sortedLogs.map(log => log.date));
+    let checkDate = new Date(lastPeriodDate);
+    // Go backwards to find start
+    while (true) {
+      checkDate.setDate(checkDate.getDate() - 1);
+      const dateStr = checkDate.toISOString().split('T')[0];
+      if (logDates.has(dateStr)) {
+        lastPeriodStart = new Date(checkDate);
+      } else {
+        break;
+      }
+    }
+    // Go forwards to find end
+    checkDate = new Date(lastPeriodDate);
+    while (true) {
+      checkDate.setDate(checkDate.getDate() + 1);
+      const dateStr = checkDate.toISOString().split('T')[0];
+      if (logDates.has(dateStr)) {
+        lastPeriodEnd = new Date(checkDate);
+      } else {
+        break;
+      }
+    }
+    const dateRange = `${lastPeriodStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${lastPeriodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+
+    // Average cycle
+    const avgCycle = stats.averageLength ? `${stats.averageLength}` : '28';
+
+    // Period length: calculate average period duration
+    const periodLengths = [];
+    let currentPeriodStart = null;
+    const sortedAsc = [...logs].sort((a, b) => new Date(a.date) - new Date(b.date));
+    for (const log of sortedAsc) {
+      if (!currentPeriodStart) {
+        currentPeriodStart = new Date(log.date);
+      } else {
+        const diff = Math.floor((new Date(log.date) - currentPeriodStart) / (1000 * 60 * 60 * 24));
+        if (diff > 1) { // Gap indicates end of period
+          periodLengths.push(Math.floor((new Date(log.date) - currentPeriodStart) / (1000 * 60 * 60 * 24)));
+          currentPeriodStart = new Date(log.date);
+        }
+      }
+    }
+    const avgPeriodLength = periodLengths.length ? Math.round(periodLengths.reduce((a, b) => a + b, 0) / periodLengths.length) : 5;
+    const periodLength = `${avgPeriodLength}-${avgPeriodLength + 2}`;
+
+    // Regularity
+    const regularity = stats.variability !== null ? Math.max(0, 100 - stats.variability * 2) : 85;
+
+    return {
+      currentDay,
+      cycleLength,
+      nextPeriod: nextPeriodStr,
+      dateRange,
+      avgCycle,
+      periodLength,
+      regularity: `${regularity}%`
+    };
+  } catch (error) {
+    console.error('Error calculating menstrual data:', error);
+    return {
+      currentDay: 1,
+      cycleLength: 28,
+      nextPeriod: 'Not available',
+      dateRange: 'No data',
+      avgCycle: '28',
+      periodLength: '5-7',
+      regularity: 'N/A'
+    };
+  }
+};
+
 // Generate insights
 const generateInsights = (reportData) => {
   const insights = [];
@@ -318,6 +431,7 @@ export const getProgressReports = async (req, res) => {
     const moodData = await calculateMoodData(userId, startDate, endDate);
     const exerciseData = await calculateExerciseData(userId, startDate, endDate);
     const dietData = await calculateDietData(userId, startDate, endDate);
+    const menstrualData = await calculateMenstrualData(userId);
 
     const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
     const activeDays = await UserActivity.countDocuments({
@@ -333,6 +447,7 @@ export const getProgressReports = async (req, res) => {
       ...moodData,
       exerciseData,
       dietData,
+      menstrualData,
       goalProgress,
       goalTrend: calculateGlobalTrend(streakData.currentStreak, streakData.longestStreak),
       streakTrend: calculateStreakTrend(streakData)
@@ -385,7 +500,132 @@ const calculateGlobalTrend = (current, longest) => {
 
 export const exportReport = async (req, res) => {
   try {
-    res.json({ message: 'Export functionality coming soon' });
+    const userId = req.user.id;
+    const { timeRange = '30' } = req.query;
+    const { startDate, endDate } = getDateRange(timeRange);
+
+    // Get fresh report data
+    const streakData = await calculateStreak(userId, endDate);
+    const moodData = await calculateMoodData(userId, startDate, endDate);
+    const exerciseData = await calculateExerciseData(userId, startDate, endDate);
+    const dietData = await calculateDietData(userId, startDate, endDate);
+    const menstrualData = await calculateMenstrualData(userId);
+
+    const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+    const activeDays = await UserActivity.countDocuments({
+      userId,
+      date: { $gte: startDate, $lte: endDate },
+      streakDay: true
+    });
+
+    const goalProgress = Math.round((activeDays / totalDays) * 100);
+
+    const reportData = {
+      ...streakData,
+      ...moodData,
+      exerciseData,
+      dietData,
+      menstrualData,
+      goalProgress,
+      goalTrend: calculateGlobalTrend(streakData.currentStreak, streakData.longestStreak),
+      streakTrend: calculateStreakTrend(streakData)
+    };
+
+    reportData.insights = (generateInsights(reportData) || []).map(item =>
+      typeof item === 'string'
+        ? { icon: 'ℹ️', text: item, type: 'info' }
+        : {
+            icon: item.icon || 'ℹ️',
+            text: item.text || '',
+            type: item.type || 'info'
+          }
+    );
+
+    // Generate PDF
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 50
+    });
+
+    // Set response headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="progress-report-${Date.now()}.pdf"`);
+
+    // Pipe PDF to response
+    doc.pipe(res);
+
+    // Title
+    doc.fontSize(24).font('Helvetica-Bold').text('PCOS Progress Report', { align: 'center' });
+    doc.fontSize(10).font('Helvetica').text(`Period: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`, { align: 'center' });
+    doc.moveDown();
+
+    // Summary Section
+    doc.fontSize(14).font('Helvetica-Bold').text('Summary');
+    doc.fontSize(11).font('Helvetica');
+    doc.text(`Current Streak: ${streakData.currentStreak} days`);
+    doc.text(`Longest Streak: ${streakData.longestStreak} days`);
+    doc.text(`Goal Progress: ${goalProgress}%`);
+    doc.moveDown();
+
+    // Menstrual Data Section
+    doc.fontSize(14).font('Helvetica-Bold').text('Menstrual Cycle');
+    doc.fontSize(11).font('Helvetica');
+    doc.text(`Current Cycle Day: ${menstrualData.currentDay}`);
+    doc.text(`Average Cycle Length: ${menstrualData.avgCycle} days`);
+    doc.text(`Estimated Next Period: ${menstrualData.nextPeriod}`);
+    doc.text(`Period Regularity: ${menstrualData.regularity}`);
+    doc.moveDown();
+
+    // Mood Data Section
+    if (moodData) {
+      doc.fontSize(14).font('Helvetica-Bold').text('Mood Tracking');
+      doc.fontSize(11).font('Helvetica');
+      doc.text(`Average Mood: ${moodData.averageMood}`);
+      doc.text(`Journal Entries: ${moodData.journalCount}`);
+      doc.text(`Mood Trend: ${moodData.moodTrend > 0 ? '+' : ''}${moodData.moodTrend}%`);
+      doc.moveDown();
+    }
+
+    // Exercise Data Section
+    if (exerciseData && exerciseData.exercises.length > 0) {
+      doc.fontSize(14).font('Helvetica-Bold').text('Exercise Activity');
+      doc.fontSize(11).font('Helvetica');
+      exerciseData.exercises.forEach(ex => {
+        doc.text(`${ex.icon} ${ex.name}: ${ex.sessions} sessions`);
+      });
+      doc.moveDown();
+    }
+
+    // Diet Data Section
+    if (dietData) {
+      doc.fontSize(14).font('Helvetica-Bold').text('Nutrition & Hydration');
+      doc.fontSize(11).font('Helvetica');
+      doc.text(`Average Daily Calories: ${dietData.calories.consumed} / ${dietData.calories.goal}`);
+      if (dietData.nutrition) {
+        dietData.nutrition.forEach(nutrient => {
+          doc.text(`${nutrient.label}: ${nutrient.value}${nutrient.unit} / ${nutrient.goal}${nutrient.unit}`);
+        });
+      }
+      doc.text(`Water Intake: ${dietData.waterIntake.current} / ${dietData.waterIntake.goal} glasses`);
+      doc.moveDown();
+    }
+
+    // Insights Section
+    if (reportData.insights && reportData.insights.length > 0) {
+      doc.fontSize(14).font('Helvetica-Bold').text('Insights & Recommendations');
+      doc.fontSize(11).font('Helvetica');
+      reportData.insights.forEach(insight => {
+        doc.text(`${insight.icon} ${insight.text}`);
+      });
+      doc.moveDown();
+    }
+
+    // Footer
+    doc.fontSize(9).font('Helvetica').text('Generated by PCOS Sync', { align: 'center' });
+    doc.text(`Generated on ${new Date().toLocaleString()}`, { align: 'center' });
+
+    // End document
+    doc.end();
   } catch (error) {
     console.error('Error exporting report:', error);
     res.status(500).json({

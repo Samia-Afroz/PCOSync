@@ -39,6 +39,8 @@ const CycleTracker = () => {
     toast.success('Period logged successfully', {
       description: 'Your entry has been saved.',
     });
+    // Notify progress reports to refresh
+    window.dispatchEvent(new CustomEvent('progressReports:refresh'));
   };
 
   return (

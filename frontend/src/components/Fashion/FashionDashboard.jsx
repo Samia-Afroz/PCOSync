@@ -116,14 +116,75 @@ const FashionDashboard = () => {
     }, [recommendations]);
 
     const fabricContent = [
-        { title: 'Cotton Blends', subtitle: 'Breathable and comfortable', icon: <div className="circle" />, color: 'lightpurple' },
-        { title: 'Jersey Knit', subtitle: 'Stretchy and forgiving', icon: <div className="circle" />, color: 'lightpink' },
-        { title: 'Modal/Bamboo', subtitle: 'Soft and moisture-wicking', icon: <div className="circle" />, color: 'lightpink' }
+        {
+            title: 'Cotton Blends',
+            subtitle: 'Breathable and comfortable',
+            color: 'lightpurple',
+            icon: (
+                <div className="fabric-icon-chip purple-chip">
+                    <svg width="18" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="#a246d8" strokeWidth="2">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M8 12l2 2l4-4" />
+                    </svg>
+                </div>
+            )
+        },
+        {
+            title: 'Jersey Knit',
+            subtitle: 'Stretchy and forgiving',
+            color: 'lightpink',
+            icon: (
+                <div className="fabric-icon-chip pink-chip">
+                    <svg width="18" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="#d846b4" strokeWidth="2">
+                        <path d="M4 12a8 8 0 0 1 16 0" />
+                        <path d="M8 12l2 2l4-4" />
+                    </svg>
+                </div>
+            )
+        },
+        {
+            title: 'Modal/Bamboo',
+            subtitle: 'Soft and moisture-wicking',
+            color: 'lightpink',
+            icon: (
+                <div className="fabric-icon-chip pink-chip">
+                    <svg width="18" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="#d846b4" strokeWidth="2">
+                        <path d="M6 20c6-6 6-14 6-14" />
+                        <path d="M12 6l6 6" />
+                    </svg>
+                </div>
+            )
+        }
     ];
 
     const colorContent = [
-        { title: 'Soft Pastels', subtitle: 'Calming and gentle', icon: <div style={{ background: '#ffdeeb' }} className="circle" /> },
-        { title: 'Deep Earth Tones', subtitle: 'Grounding and solid', icon: <div style={{ background: '#815b5b' }} className="circle" /> }
+        {
+            title: 'Soft Pastels',
+            subtitle: 'Calming and gentle',
+            icon: (
+                <div className="fabric-icon-chip pastel-chip">
+                    <svg width="18" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="#ff7ab8" strokeWidth="2">
+                        <circle cx="12" cy="12" r="9" />
+                    </svg>
+                </div>
+            )
+        },
+        {
+            title: 'Deep Earth Tones',
+            subtitle: 'Grounding and solid',
+            icon: (
+                <div className="fabric-icon-chip earth-chip">
+                    <svg width="18" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="#6a4b3b" strokeWidth="2">
+                        <rect x="6" y="6" width="12" height="12" rx="3" />
+                    </svg>
+                </div>
+            )
+        }
     ];
 
     const getDynamicRec = () => {
@@ -141,9 +202,16 @@ const FashionDashboard = () => {
     return (
         <div className="fashion-dashboard container mx-auto px-4 py-6">
             <div className="banner fashion-banner">
-                <div className="banner-icon">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.62 1.97V21a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V5.43a2 2 0 0 0-1.62-1.97z"></path><path d="M12 22V11"></path><path d="m8 6 4-4 4 4"></path></svg>
+            <div className="banner-icon badge-icon">
+                <div className="badge-icon-wrap">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+                        stroke="#a246d8" strokeWidth="2">
+                        <path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.62 1.97V21a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V5.43a2 2 0 0 0-1.62-1.97z"/>
+                        <path d="M12 22V11"/>
+                        <path d="m8 6 4-4 4 4"/>
+                    </svg>
                 </div>
+            </div>
                 <div className="banner-text">
                     <h2>Fashion Recommendations</h2>
                     <p>Personalized style suggestions based on your current symptoms</p>

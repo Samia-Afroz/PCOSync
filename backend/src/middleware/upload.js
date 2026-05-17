@@ -14,12 +14,11 @@ const __dirname = path.dirname(__filename);
 ----------------------------------- */
 const USER_PHOTO_DIR = path.join(__dirname, "../../uploads/user-photos");
 const OUTFIT_PHOTO_DIR = path.join(__dirname, "../../uploads/outfits");
-const RESULT_PHOTO_DIR = path.join(__dirname, "../../uploads/results");
 
 /* ----------------------------------
    Ensure directories exist
 ----------------------------------- */
-[USER_PHOTO_DIR, OUTFIT_PHOTO_DIR, RESULT_PHOTO_DIR].forEach((dir) => {
+[USER_PHOTO_DIR, OUTFIT_PHOTO_DIR].forEach((dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
     console.log(`✅ Created directory: ${dir}`);

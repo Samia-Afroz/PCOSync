@@ -315,3 +315,37 @@
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 1.25rem;
   }
+
+  .fabric-icon-chip {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-sm);
+    background: white;
+  }
+  
+  /* Matches screenshot aesthetic */
+  
+  .purple-chip {
+    background: #f3e8ff;
+  }
+  
+  .pink-chip {
+    background: #ffe4f2;
+  }
+  
+  .pastel-chip {
+    background: #ffdeeb;
+  }
+  
+  .earth-chip {
+    background: #e8d6c3;
+  }
+  
+  .fabric-card svg {
+    opacity: 0.9;
+  }
+  

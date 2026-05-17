@@ -25,6 +25,12 @@ const ProgressReports = () => {
     return () => window.removeEventListener('dailyCheckin:updated', handler);
   }, [timeRange]);
 
+  useEffect(() => {
+    const handler = () => fetchReportData();
+    window.addEventListener('progressReports:refresh', handler);
+    return () => window.removeEventListener('progressReports:refresh', handler);
+  }, [timeRange]);
+
   const fetchReportData = async () => {
     try {
       setLoading(true);

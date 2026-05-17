@@ -6,18 +6,63 @@ npm install express mongoose dotenv cors axios jsonwebtoken bcryptjs node-cron
 
 npm install --save-dev nodemon
 
-⚠️ When working with the virtual try-on feature there is an optional mock mode that simply returns the uploaded user photo instead of calling the external API. You can disable the mock by ensuring the environment variable `USE_MOCK_VTON` is either unset or set to `false` (set to `true` for development testing).
+⚠️ When working with the virtual try-on feature there is an optional mock mode that simply returns the uploaded user photo instead of calling the model. You can toggle mock responses by setting the environment variable `USE_MOCK_VTON=true` for development/testing.
 
-Make sure you supply the external API details via environment variables (or `backend/src/config/apikeys.js`):
+### CP‑VTon model setup
 
-- `AIPHOTOCRAFT_API_URL` – **full API endpoint** of the try-on service (e.g. `https://api.aiphotocraft.com/v1/try-on`). The base website (`https://aiphotocraft.com`) is not sufficient.
-- `AIPHOTOVR_KEY` or `AIPHOTOCRAFT_API_KEY` – your **secret API key/token** obtained from the provider.
+The backend now uses the open‑source CP‑VTon project for try-on instead of a paid API. A copy of the repository is checked out to `backend/tryon-model`.
 
-> ⚠️ The sample key shown in `config/apikeys.js` is only decorative and will not work. Replace it with the real key or set it via environment variables. If you leave the placeholder URL or key the server returns an explanatory error instead of crashing.
+- **Python dependencies & environment:**
 
-If the URL is missing or still the example value, the server will respond with a clear error message instead of crashing.
+  ```bash
+  cd backend/tryon-model
+  python -m venv venv
+  source venv/bin/activate    # Windows: `venv\\Scripts\\activate`
+  # install packages; the original repo provides environment.yml:
+  pip install -r requirements.txt       # or `conda env create -f environment.yml`
+  ```
 
-Also note the `backend/src/config/apikeys.js` file now uses an ES module `export default` so imports should use `import config from '../config/apikeys.js';`. 
+  Make sure `python` (the interpreter from the venv) is on your `PATH`.
+
+- **Pretrained weights:** download a compatible CP‑VTon checkpoint and
+  place it at `tryon-model/checkpoint.pth` (or update the path in
+  `run.py`).
+
+- **run.py behavior:** the Node backend invokes the script with three
+  arguments:
+
+  ```text
+  python run.py <person_image> <clothes_image> <output_image>
+  ```
+
+  Internally the service will try to locate a Python interpreter for you:
+  it first checks the **CP_VTON_PYTHON** environment variable, then
+  looks for `backend/tryon-model/venv` (Songs of Windows vs Unix paths are
+  handled automatically).  If neither is found it falls back to the plain
+  `python` command.
+
+  > If you encounter `spawn python ENOENT`, either install Python on your
+  > PATH or set `CP_VTON_PYTHON` to the absolute path of the desired
+  > executable (e.g. the one inside your virtualenv).
+
+  The provided `run.py` contains a comprehensive template showing how to
+  load the PyTorch network, preprocess inputs, run inference and save
+  the result.  During early development the script simply copies the
+  person image; uncomment or replace the appropriate sections once your
+  model and checkpoint are ready.
+
+  Alternatively you can call `test.py` directly from `run.py` as shown
+  in the comments.
+
+  Whichever method you choose, ensure the script exits with code `0` and
+  writes the output image; the backend will then respond with
+  `{ success: true, resultImageUrl: "/outputs/…" }`.
+
+Once the environment is configured, POSTing images to `/api/virtual-tryon` will run the model locally and return a URL such as `/outputs/result-123456.png`.
+
+> The old AiPhotocraft API keys (`AIPHOTOCRAFT_API_URL`, `AIPHOTOVR_KEY`, etc.) are no longer used and can be removed from `.env` if present.
+
+The `backend/src/config/apikeys.js` file has been removed since it is no longer needed. 
 
 ⚙️ Frontend – install these
 

@@ -13,6 +13,18 @@ const PCOSPrediction = () => {
   };
 
   const handleSubmit = async () => {
+    const requiredFields = [
+      "age", "weight", "height", "bmi", "cycle", 
+      "hairLoss", "pimples", "fastFood", "skinDarkening"
+    ];
+
+    const missingFields = requiredFields.filter(field => form[field] === undefined || form[field] === "");
+    
+    if (missingFields.length > 0) {
+      setError(`Please fill in all fields: ${missingFields.join(", ")}`);
+      return;
+    }
+
     try {
       setLoading(true);
       setError("");
@@ -25,7 +37,8 @@ const PCOSPrediction = () => {
 
       setResult(res.data.result || "Prediction completed");
     } catch (err) {
-      setError("PCOS prediction failed");
+      const msg = err.response?.data?.error || err.response?.data?.message || "PCOS prediction failed";
+      setError(msg);
     } finally {
       setLoading(false);
     }

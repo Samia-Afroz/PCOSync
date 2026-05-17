@@ -1,5 +1,5 @@
 import VirtualTryOn from '../models/VirtualTryOn.js';
-import { callVirtualTryOnAPI, downloadResultImage } from '../utils/apiHelper.js';
+import { runVirtualTryOn } from '../services/virtualTryOnService.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -35,73 +35,42 @@ export const generateTryOn = async (req, res) => {
     console.log('📷 User Photo:', userPhoto.filename);
     console.log('👔 Outfit Photo:', outfitPhoto.filename);
 
-    // Determine whether to use a mock response (development/testing) or call the real API.
-    const useMock = process.env.USE_MOCK_VTON === 'true';
-    let apiResponse;
-
-    if (useMock) {
-      console.log('🧪 Using mock virtual try-on response');
-      apiResponse = {
-        success: true,
-        resultImageUrl: `/uploads/user-photos/${userPhoto.filename}`, // mirror user photo
-        requestId: `mock-${Date.now()}`,
-        data: { mock: true },
-        processingTime: 1000,
-      };
+    // optionally return a mock result for development/testing
+    let resultImageUrl;
+    if (process.env.USE_MOCK_VTON === 'true') {
+      console.log('🧪 USE_MOCK_VTON enabled, returning user photo as result');
+      resultImageUrl = `/uploads/user-photos/${userPhoto.filename}`;
     } else {
-      // Call the virtual try-on API (AiPhotocraft or similar)
-      apiResponse = await callVirtualTryOnAPI(
-        userPhoto.path,
-        outfitPhoto.path
-      );
-
-      // If the external API failed, clean up and return error
-      if (!apiResponse.success) {
-        // Clean up uploaded files on error
+      // execute the CP-VTON model locally using our service helper
+      console.log('🛠️ Calling CP-VTON service...');
+      let tryOnResponse;
+      try {
+        tryOnResponse = await runVirtualTryOn(userPhoto.path, outfitPhoto.path);
+        console.log('🟢 CP-VTON service returned:', tryOnResponse);
+      } catch (err) {
+        // clean up uploaded files on error
         await fs.unlink(userPhoto.path).catch(() => {});
         await fs.unlink(outfitPhoto.path).catch(() => {});
-
-        return res.status(apiResponse.statusCode || 500).json({
+        console.error('❌ Error running CP-VTON script:', err);
+        return res.status(500).json({
           success: false,
-          message: apiResponse.error || 'Failed to generate virtual try-on',
-          details: apiResponse.details,
+          message: err.error || 'Failed to run virtual try-on model',
         });
       }
-    }
 
-    // the service may return a remote URL – download it so we can serve it locally
-    let resultImageUrl = apiResponse.resultImageUrl;
-    if (resultImageUrl && resultImageUrl.startsWith('http')) {
-      try {
-        // ensure results directory exists
-        const RESULTS_DIR = path.join(__dirname, '../../uploads/results');
-        await fs.mkdir(RESULTS_DIR, { recursive: true });
+      resultImageUrl = tryOnResponse.resultImageUrl;
 
-        const ext = path.extname(resultImageUrl).split('?')[0] || '.jpg';
-        const resultFilename = `result-${Date.now()}${ext}`;
-        const savePath = path.join(RESULTS_DIR, resultFilename);
-
-        // downloadResultImage was added to imports above
-        await downloadResultImage(resultImageUrl, savePath);
-        resultImageUrl = `/uploads/results/${resultFilename}`;
-      } catch (downloadErr) {
-        console.error('⚠️ failed to download remote result image, falling back to remote url', downloadErr.message);
-        // keep remote URL if download fails
+      if (!resultImageUrl) {
+        console.error('❌ CP-VTON service did not return a resultImageUrl', tryOnResponse);
+        return res.status(500).json({
+          success: false,
+          message: 'Try-on model did not produce an output image',
+        });
       }
+      console.log('📂 Result image path:', resultImageUrl);
     }
 
-    // if the API already returned a local path (for example development), just use it
-
-    const processingTime = Date.now() - startTime;
-
-    // ensure the API gave us something sensible
-    if (!resultImageUrl) {
-      console.error('❌ No resultImageUrl after API call', apiResponse);
-      return res.status(500).json({
-        success: false,
-        message: 'Virtual try-on API did not return a result image',
-      });
-    }
+    const processingTime = Date.now() - startTime; // already validated resultImageUrl above
 
     // Save to database
     const tryOn = new VirtualTryOn({
@@ -109,7 +78,7 @@ export const generateTryOn = async (req, res) => {
       userPhotoUrl: `/uploads/user-photos/${userPhoto.filename}`,
       outfitPhotoUrl: `/uploads/outfits/${outfitPhoto.filename}`,
       resultPhotoUrl: resultImageUrl,
-      apiRequestId: apiResponse.requestId,
+      apiRequestId: null,
       processingStatus: 'completed',
       notes: req.body.notes || '',
       tags: req.body.tags
@@ -117,7 +86,7 @@ export const generateTryOn = async (req, res) => {
         : [],
       metadata: {
         processingTime,
-        apiResponse: apiResponse.data,
+        // model-specific metadata can go here if needed
       },
     });
 

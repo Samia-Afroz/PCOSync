@@ -1,12 +1,5 @@
 import axios from "axios";
-
-/**
- * =========================
- * API BASE URL (VITE SAFE)
- * =========================
- */
-export const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { API_URL } from "../utils/constants";
 
 /**
  * =========================

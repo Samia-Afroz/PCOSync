@@ -9,10 +9,7 @@ export function Header() {
         </div>
 
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">
-            PCOS SYNC
-          </h1>
-          <p className="text-sm text-gray-500">
+          <p class="text-xl font-semibold mb-4 text-purple-600">
             PCOS Cycle Tracker
           </p>
         </div>
