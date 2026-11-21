@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="Screenshot.png" width="100%" alt="Project Cover">
+</div>
+
 ⚙️ Backend – install these
 
 cd backend
