@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="Screenshot(89).png" width="100%" alt="Project Cover">
+  <img src="Cover.png" width="100%" alt="Project Cover">
 </div>
 
 ⚙️ Backend – install these
